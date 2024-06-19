@@ -173,21 +173,22 @@ def GetCBBias15_V2(date_str):
     cbdf['pct_chg_gap5'] = cbdf['pct_chg_5']-cbdf['pct_chg_5_stk']
 
 
+    #保留当日数据
+    df = cbdf[cbdf['trade_date'] == date].copy()   
+
     #计算 期权价值因子
 
     option_value = OptionValue()
     ov_df = option_value.get_allcb_option_value()
 
-    cbdf = pd.merge(cbdf, ov_df, on='code', how='left')
-    
-    #保留当日数据
-    df = cbdf[cbdf['trade_date'] == date].copy()   
-    
+    df = pd.merge(df, ov_df, on='code', how='left')
+
+    df.to_excel(r'C:\\Temp\\call_value.xlsx') 
 
     #排除强赎和低评级,ST
     df = ExcludeRatings(df)
     df = ExcludeForcedRedem(df)
-    df = ExcludeST(df)      
+    #df = ExcludeST(df)      
 
     #排除设置 
     df = df[df['conv_prem']<=0.5].copy()
