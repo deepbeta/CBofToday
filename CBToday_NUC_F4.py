@@ -14,7 +14,7 @@ from time import sleep
 from bs4 import BeautifulSoup
 from datetime import date,datetime, timedelta
 from chinese_calendar import is_workday
-from constants import CB_OF_TODAY_CONV_BIAS,DATA_LOG_FILE,STRATEGY_FILE,STRATEGY_CONV_BIAS
+from constants import CB_OF_TODAY_CONV_BIAS,DATA_LOG_FILE,STRATEGY_FILE,STRATEGY_CONV_BIAS,CB_OF_TODAY_NUC_F4
 import logging
 from chinese_calendar import is_workday
 import re
@@ -144,7 +144,7 @@ def get_NUC_F4(date_str):                              #获取15%乖离率的转
     return df
 
 #2024-05-12 V2双刀头 溢价率偏离15+涨幅差策略
-def GetCBBias15_V2(date_str):                              
+def GetNUC_F4(date_str):                              
        
     date = datetime.strptime(date_str, '%Y-%m-%d').date()
     # 2024-02-21 改为取之前40天的数据,春节长假30天不够导致计算错误
@@ -180,27 +180,34 @@ def GetCBBias15_V2(date_str):
 
     option_value = OptionValue()
     ov_df = option_value.get_allcb_option_value()
+    call_value_df = ov_df[['code', 'call_value']].copy()
 
-    df = pd.merge(df, ov_df, on='code', how='left')
+
+    df = pd.merge(df, call_value_df, on='code', how='left')
 
     df.to_excel(r'C:\\Temp\\call_value.xlsx') 
 
     #排除强赎和低评级,ST
-    df = ExcludeRatings(df)
+    #df = ExcludeRatings(df)
     df = ExcludeForcedRedem(df)
     #df = ExcludeST(df)      
+    #排除新债
+    df.loc[cbdf.left_years > 5.99, 'filter'] = True # 排除新债
+
 
     #排除设置 
-    df = df[df['conv_prem']<=0.5].copy()
-    df = df[df['remain_cap']<=5].copy()
-    df = df[df['close']<=140].copy()
-    df = df[df['left_years']>=0.5].copy()
-    df = df[df['left_years']<=5].copy()
+
+    df = df[df['close']<=145].copy()
+    df = df[df['close']>=100].copy()
+    df = df[df['left_years']>=1].copy()
+
 
     # 生成因子字典，name:列名，weight:权重, ascending:排序方向,False为负相关
     rank_factors = [
-        {'name': 'conv_bias15', 'weight': 3, 'ascending': False}, 
-        {'name': 'pct_chg_gap5', 'weight': 1, 'ascending': False}, ]
+        {'name': 'conv_bias15', 'weight': 1, 'ascending': False}, 
+        {'name': 'remain_cap', 'weight': 1, 'ascending': False}, 
+        {'name': 'bond_prem', 'weight': 1, 'ascending': False},
+        {'name': 'call_value', 'weight': 1, 'ascending': True}, ]
 
     # 计算多因子得分 和 排名(score总分越大越好， rank总排名越小越好)
 
@@ -233,24 +240,24 @@ logging.warning('CBofToday 溢价率偏离率:----->'+str(dt))
 dt_str = dt.strftime('%Y-%m-%d')
 
 #dt_str = '2024-06-12'
-df = GetCBBias15_V2(dt_str)
+df = GetNUC_F4(dt_str)
 
 now = datetime.now()
 current_hour = now.hour
 
 if current_hour < 15:
 
-    filename=CB_OF_TODAY_CONV_BIAS+str(dt)+'-V2-IN'+'.xlsx'                         #2023-10-10 盘中选债，收盘前执行
+    filename=CB_OF_TODAY_NUC_F4+'-'+str(dt)+'-IN'+'.xlsx'                         #2023-10-10 盘中选债，收盘前执行
         
 else:
-    filename=CB_OF_TODAY_CONV_BIAS+str(dt)+'-V2-OUT'+'.xlsx'                          #盘后选债，用于比较
+    filename=CB_OF_TODAY_NUC_F4+'-'+str(dt)+'-OUT'+'.xlsx'                          #盘后选债，用于比较
 
 
 df.to_excel(filename)
 
-filename = STRATEGY_FILE+str(dt)+'.xlsx'                            
+#filename = STRATEGY_FILE+str(dt)+'.xlsx'                            
 
-print(filename)
-df.to_excel(filename, sheet_name=STRATEGY_CONV_BIAS, index=False)               #写入策略篮子文件，用于交易    
+#print(filename)
+#df.to_excel(filename, sheet_name=STRATEGY_CONV_BIAS, index=False)               #写入策略篮子文件，用于交易    
 
 
